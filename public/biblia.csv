@@ -1,0 +1,6 @@
+author,authorKOR,authorENG,bookTitle,bookTitleKOR,bookTitleENG,supportsELH,supportsKOR,supportsKOM,supportsENG,supportsKGM,supportsDGM,supportsCDX,supportsCMT,supportsSMY,private,incomplete
+Archimedes,아르키메데스,Archimedes,on-spirals,나선들에 관하여,On spirals,1,1,1,0,1,0,0,1,1,0,0
+Archimedes,아르키메데스,Archimedes,on-the-sphere-and-the-cylinder,구와 원기둥에 관하여,On the sphere and the cylinder,1,0,0,0,1,0,0,0,1,0,1
+Euclides,에우클레이데스(유클리드),Euclides,elements,원론,Elements,1,1,0,0,0,0,0,0,0,0,1
+Heron,헤론,Heron,metrica,메트리카,Metrica,1,1,1,0,0,0,0,0,0,0,1
+DEVELOPER,개발자,developer,developer-space,개발자공간,developer space,1,0,0,0,0,0,0,0,0,1,1
