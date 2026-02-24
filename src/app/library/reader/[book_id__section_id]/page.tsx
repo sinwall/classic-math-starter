@@ -65,15 +65,9 @@ class TSVframe {
     }
 }
 
-console.log("#############CWD############")
-console.log(process.cwd())
-console.log(readdirSync('/'))
-console.log(readdirSync(process.cwd()))
-console.log("#############CWD############")
-
-const sections_dict = new TSVframe('public/texts/sections.tsv');
-const paragraphs_dict = new TSVframe('public/texts/paragraphs.tsv');
-
+const public_dir = path.join(process.cwd(), 'public')
+const sections_dict = new TSVframe(path.join(public_dir, 'texts/sections.tsv'));
+const paragraphs_dict = new TSVframe(path.join(public_dir, 'texts/paragraphs.tsv'));
 
 export default async function Home(
     context: { params: Promise<RouteParams> }
@@ -145,6 +139,7 @@ export default async function Home(
     );
 
 }
+
 
 
 
