@@ -3,8 +3,8 @@ import path from 'path'
 
 const rootdir: string[] = readdirSync('/');
 let anothers: string[] = [];
-if (rootdir.indexOf('bundle') != -1) {
-    anothers.push('bundle\n' + readdirSync('/bundle').join('\n'));
+if (rootdir.indexOf('dev') != -1) {
+    anothers.push(readdirSync('/dev').join('\n'));
 }
 
 export default async function Home() {
