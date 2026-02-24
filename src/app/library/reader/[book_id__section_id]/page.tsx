@@ -65,6 +65,12 @@ class TSVframe {
     }
 }
 
+console.log("#############CWD############")
+console.log(process.cwd())
+console.log(fs.readdirSync('/'))
+console.log(fs.readdirSync(process.cwd()))
+console.log("#############CWD############")
+
 const sections_dict = new TSVframe('public/texts/sections.tsv');
 const paragraphs_dict = new TSVframe('public/texts/paragraphs.tsv');
 
@@ -139,4 +145,5 @@ export default async function Home(
     );
 
 }
+
 
