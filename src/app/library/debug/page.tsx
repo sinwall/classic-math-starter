@@ -8,8 +8,10 @@ export default async function Home() {
             <div>{"__dirname: "}{__dirname}</div>
             <div>{"rootdir: "}{readdirSync('/').join('\n')}</div>
             <div>{"curdir: "}{readdirSync(process.cwd()).join('\n')}</div>
+            <div>{"another: "}{readdirSync('/bundle').join('\n')}</div>
             <div>{"another: "}{readdirSync('/tmp').join('\n')}</div>
             <div>{"another: "}{readdirSync('/dev').join('\n')}</div>
         </div>
     );
+
 }
