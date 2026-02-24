@@ -65,8 +65,8 @@ class TSVframe {
     }
 }
 
-const sections_dict = new TSVframe('../public/texts/sections.tsv');
-const paragraphs_dict = new TSVframe('../public/texts/paragraphs.tsv');
+const sections_dict = new TSVframe('public/texts/sections.tsv');
+const paragraphs_dict = new TSVframe('public/texts/paragraphs.tsv');
 
 
 export default async function Home(
@@ -139,3 +139,4 @@ export default async function Home(
     );
 
 }
+
