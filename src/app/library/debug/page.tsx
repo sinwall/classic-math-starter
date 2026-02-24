@@ -7,7 +7,7 @@ if (rootdir.indexOf('dev') != -1) {
     anothers.push(readdirSync('/dev').join('\n'));
 }
 if (anothers.length > 0) {
-    for (let boo of readdirSync('dev')) {
+    for (let boo of readdirSync('/dev')) {
         anothers.push(readdirSync(`/dev/${boo}`).join('\n'));
     }
 }
