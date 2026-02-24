@@ -1,0 +1,10 @@
+.subBar {
+    background-color: #f9f1df;
+    padding: 0rem 2rem;
+    border-bottom: 1px solid #d8cbb2;
+    display: flex;
+    /* justify-content: space-between; */
+    align-items: center;
+    /* flex-wrap: wrap; */
+    height: 6vh;
+}

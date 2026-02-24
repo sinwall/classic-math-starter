@@ -1,0 +1,6 @@
+.sectionNavigator {
+    /* border: 1px solid; */
+    padding: 1rem 1rem;
+    width: 15%;
+    overflow: auto;
+}
