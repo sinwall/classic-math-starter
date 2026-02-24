@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync } from 'fs'
+import { readFileSync } from 'fs'
+import path from 'path'
 import Reader from '../../../../components/reader/Reader'
 import {IdName, LayerContent, SectionContent} from '../../../../utils/utils'
 
@@ -139,6 +140,7 @@ export default async function Home(
     );
 
 }
+
 
 
 
