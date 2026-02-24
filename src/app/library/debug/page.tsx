@@ -1,4 +1,4 @@
-import { readdirSync } from 'fs'
+import { readdirSync, statSync } from 'fs'
 import path from 'path'
 
 const rootdir: string[] = readdirSync('/');
@@ -8,7 +8,9 @@ if (rootdir.indexOf('dev') != -1) {
 }
 if (anothers.length > 0) {
     for (let boo of readdirSync('/dev')) {
-        anothers.push(readdirSync(`/dev/${boo}`).join('\n'));
+        if (statSync(`/dev/${boo}`).isDirectory()) {
+            anothers.push(readdirSync(`/dev/${boo}`).join('\n'));
+        }
     }
 }
 
