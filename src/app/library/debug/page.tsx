@@ -6,8 +6,10 @@ export default async function Home() {
         <div> 
             <div>{"cwd: "}{process.cwd()}</div>
             <div>{"__dirname: "}{__dirname}</div>
-            <div>{"rootdir: "}{readdirSync('/')}</div>
-            <div>{"curdir: "}{readdirSync(process.cwd())}</div>
+            <div>{"rootdir: "}{readdirSync('/').join('\n')}</div>
+            <div>{"curdir: "}{readdirSync(process.cwd()).join('\n')}</div>
+            <div>{"another: "}{readdirSync('/tmp').join('\n')}</div>
+            <div>{"another: "}{readdirSync('/dev').join('\n')}</div>
         </div>
     );
 }
