@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import Reader from '../../../../components/reader/Reader'
 import {IdName, LayerContent, SectionContent} from '../../../../utils/utils'
 
@@ -67,8 +67,8 @@ class TSVframe {
 
 console.log("#############CWD############")
 console.log(process.cwd())
-console.log(fs.readdirSync('/'))
-console.log(fs.readdirSync(process.cwd()))
+console.log(readdirSync('/'))
+console.log(readdirSync(process.cwd()))
 console.log("#############CWD############")
 
 const sections_dict = new TSVframe('public/texts/sections.tsv');
@@ -145,5 +145,6 @@ export default async function Home(
     );
 
 }
+
 
 
