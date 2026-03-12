@@ -10,7 +10,7 @@ type Props = {
 
 export default (props: Props) => (
     <div style={{
-        padding: "1rem 1rem", width: "10%", overflow: "auto"
+        padding: "1rem 1rem", width: "10%", overflow: "auto", resize: "horizontal"
     }}>
         <div>{props.author.name}</div>
         <div><i>{props.book.name}</i></div>

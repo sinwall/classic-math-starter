@@ -2,6 +2,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import Reader from '../../../../components/reader/Reader'
 import {IdName, LayerContent, SectionContent} from '../../../../utils/utils'
+import { KineticDiagramConfig } from '@/diagrams/on-spirals'
 
 type RouteParams = {
     book_id__section_id: string
@@ -70,15 +71,19 @@ const public_dir = path.join(process.cwd(), 'public')
 const sections_dict = new TSVframe(path.join(public_dir, 'texts/sections.tsv'));
 const paragraphs_dict = new TSVframe(path.join(public_dir, 'texts/paragraphs.tsv'));
 
+
 export default async function Home(
     context: { params: Promise<RouteParams> }
 ) {
     const params: RouteParams = await context.params;
+
+    // read and parse book_id and section_id from params
     const book_id_section_id: string[] = params.book_id__section_id.split('__');
     let author: IdName = {id: '', name: ''};
     let book: IdName = {id: book_id_section_id[0], name: ''};
     let section: IdName = {id: book_id_section_id[1], name: ''};
     let sections: IdName[] = [];
+    // query sections_dict to find author name, book name, section name, and sections in the same book
     for (let ln: number=0; ln<sections_dict.size(); ++ln) {
         let line: TSVrow = sections_dict.selectRow(ln);
         if (line.get('book_id') === book.id) {
@@ -94,6 +99,16 @@ export default async function Home(
             sections.push({id: line.get('section_id'), name: line.get('section_name')});
         }
     }
+    // // read diagram config from src/diagrams/${book.id}.tsx
+    // const {configs: diagram_configs} = await import(`../../../../diagrams/${book.id}.tsx`);
+    // let dgm_config: KineticDiagramConfig = diagram_configs[0];
+    // for (let c of diagram_configs) {
+    //     if (c.section_id === section.id) {
+    //         dgm_config = c;
+    //         break;
+    //     }
+    // }
+    // query paragraphs_dict to find paragraphs in the section, and organize them by layers
     let paragraphs: SectionContent = {
         n_layers: 0,
         layer_types: [],
@@ -136,12 +151,7 @@ export default async function Home(
         }
     }
     return (
-        <Reader author={author} book={book} section={section} sections={sections} content={paragraphs}/>
+        <Reader author={author} book={book} section={section} 
+        sections={sections} content={paragraphs}/>
     );
-
 }
-
-
-
-
-
