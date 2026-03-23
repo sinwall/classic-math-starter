@@ -1,0 +1,7 @@
+no	author_id	author_name	book_id	book_name	section_id	section_name	has_layer_ELH	has_layer_KOR	has_layer_MAT	has_diagram_Heath	has_diagram_Heiberg	has_diagram_Netz
+0	archimedes	Archimedes	on-spirals	On Spirals	intro	Introduction	1	1	1	0	0	0
+1	archimedes	Archimedes	on-spirals	On Spirals	prop01	Proposition 1	1	1	1	0	1	1
+2	archimedes	Archimedes	on-spirals	On Spirals	prop02	Proposition 2	1	1	1	0	1	1
+3	archimedes	Archimedes	on-spirals	On Spirals	prop03	Proposition 3	1	1	1	0	0	0
+4	archimedes	Archimedes	on-spirals	On Spirals	prop04	Proposition 4	1	1	1	0	0	0
+5	archimedes	Archimedes	on-spirals	On Spirals	prop05	Proposition 5	1	1	1	1	1	1
