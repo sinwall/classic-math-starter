@@ -260,7 +260,8 @@ type KineticDiagramConfig = {
     n_steps: number,
     params_vals: number[][],
     construction (params: number[]) : (BaseGeometry|BaseGeometry[])[],
-    style_vals: StyleType[][]
+    style_vals: StyleType[][],
+    paragraph_to_step: number[]
 }
 
 function apply_transform_recursively(
@@ -284,15 +285,19 @@ export {GeneralDOM, BaseStyle};
 export {Vector};
 export type { KineticDiagramConfig };
 
-
-const configs: KineticDiagramConfig[] = [
-    {
-        section_id: "intro",
+function no_kinetic_diagram(section_id: string): KineticDiagramConfig {
+    return {
+        section_id,
         n_steps: 0, 
         params_vals: [[]],
         construction: (params: number[]) => [],
-        style_vals: [[]]
-    },
+        style_vals: [[]],
+        paragraph_to_step: []
+    }
+}
+
+const configs: KineticDiagramConfig[] = [
+    no_kinetic_diagram("intro"),
     {
         section_id: "prop01",
         n_steps: 5,
@@ -300,10 +305,11 @@ const configs: KineticDiagramConfig[] = [
             // [lengthGD, lengthDE, ratioAD, ratioBD, ratioLH, 
             // ratioHK, posHx, posHy, inverseVelocity, lockLK],
             [1.2, 0.7, 2.4, 1.5, 3.2,   2, 0.3, -1.3, 0.75, 0],
+            [1.2, 0.7, 2.4, 1.5, 3.2,   2, 0.3, -1.3, 0.75, 0],
             [1.2, 0.7, 3.0, 4.0, 3.0,   4, 0.3, -1.3, 0.75, 0],
             [1.2, 0.7, 3.0, 4.0, 3.0,   4, 0.3, -1.3, 0.75, 0],
             [1.2, 0.7, 3.0, 4.0, 3.0,   4, 0.3, -1.3, 0.75, 0],
-            [1.2, 0.7, 2.4, 1.5, 2.0,   5, 0.3, -1.3, 0.75, 0],
+            // [1.2, 0.7, 2.4, 1.5, 2.0,   5, 0.3, -1.3, 0.75, 0],
             [1.2, 0.7, 2.0, 5.0, 2.0,   5, 0.3, -1.3, 0.75, 0],
         ],
         construction: (params: number[]) => {
@@ -334,13 +340,13 @@ const configs: KineticDiagramConfig[] = [
                 );
 
             let ticksAD: Vector[] = [];
-            for (let i: number=1; i<ratioAD; i++) { ticksAD.push(D.toward(G, i)); }
+            for (let i: number=2; i<ratioAD; i++) { ticksAD.push(D.toward(G, i)); }
             let ticksLH: Vector[] = [];
-            for (let i: number=1; i<ratioLH; i++) { ticksLH.push(H.toward(Z, i)); }
+            for (let i: number=2; i<ratioLH; i++) { ticksLH.push(H.toward(Z, i)); }
             let ticksDB: Vector[] = [];
-            for (let i: number=1; i<ratioBD; i++) { ticksDB.push(D.toward(E, i)); }
+            for (let i: number=2; i<ratioBD; i++) { ticksDB.push(D.toward(E, i)); }
             let ticksHK: Vector[] = [];
-            for (let i: number=1; i<ratioHK; i++) { ticksHK.push(H.toward(Q, i)); }
+            for (let i: number=2; i<ratioHK; i++) { ticksHK.push(H.toward(Q, i)); }
 
             // let datas: Pair<string,BaseGeometry>[] = [
             //     ['AG', lineg(A,G)], ['GD', lineg(G,D)], ['DE', lineg(D,E)], ['EB', lineg(E,B)], ['AB', lineg(A,B)],
@@ -372,22 +378,23 @@ const configs: KineticDiagramConfig[] = [
         [   {}, {}, {}, {}, {visible: false},  {}, {}, {}, {}, 
             {visible: false}, {visible: false}, {visible: false}, {visible: false}, 
             {}, {}, {}, {}, {},  {}, {}, {}, {}, {}, 
-        ],[ emph("red"), emph("red"), emph("blue"), emph("blue"),  {}, {}, {}, {}, {}, 
-            {visible: true}, {visible: true}, {}, {}, 
+        ],[ {}, emph("red"), emph("blue"), {}, {},  {}, emph("red"), emph("blue"), {}, 
+            {visible: false}, {visible: false}, {visible: false}, {visible: false}, 
+            {}, {}, {}, {}, {},  {}, {}, {}, {}, {}, 
+        ],[ emph("red"), emph("red"), emph("blue"), emph("blue"),  {}, {}, deemph(), deemph(), {}, 
+            {visible: true}, {visible: true}, {visible: true}, {visible: true}, 
             {}, {}, {}, {}, {},  {}, {}, {}, {}, {}, 
         ],[ deemph(), deemph(), deemph(), deemph(),  {}, {}, {}, {}, {},
-            emph("red"), emph("red"), {visible: true}, {visible: true}, 
-            {}, {}, {}, {}, {},  {}, {}, {}, {}, {}, 
-        ],[ {}, {}, {}, {}, {},  emph("red"), emph("red"), emph("blue"), emph("blue"), 
-            deemph(), deemph(), {}, {}, 
-            {}, {}, {}, {}, {},  {}, {}, {}, {}, {}, 
-        ],[ {}, {}, {}, {}, {},   deemph(), deemph(), deemph(), deemph(),
+            emph("red"), emph("blue"), emph("red"), emph("blue"), 
+            {}, {}, emph("red"), {}, emph("blue"),  emph("red"), {}, emph("blue"), {}, {}, 
+        ],[ emph("red"), emph("red"), emph("blue"), emph("blue"), {},  emph("red"), emph("red"), emph("blue"), emph("blue"), 
+            deemph(), deemph(), deemph(), deemph(), 
+            {}, {}, deemph(), {}, deemph(),  deemph(), {}, deemph(), {}, {}, 
+        ],[ emph("blue"), emph("blue"), emph("red"), emph("red"), {},  emph("blue"), emph("blue"), emph("red"), emph("red"), 
             {}, {}, {}, {}, 
             {}, {}, {}, {}, {},  {}, {}, {}, {}, {}, 
-        ],[ emph("red"), emph("red"), emph("blue"), emph("blue"),  {}, {}, {}, {}, {}, 
-            {}, {}, {}, {}, 
-            {}, {}, {}, {}, {},  {}, {}, {}, {}, {}, 
-        ]])
+        ]]),
+        paragraph_to_step: [0, 1, 2, 4, 5]
     }
 ]
 

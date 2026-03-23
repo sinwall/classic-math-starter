@@ -1,4 +1,3 @@
-// import styles from './SectionNavigator.module.css'
 import Link from 'next/link'
 import {IdName} from '../../utils/utils'
 
@@ -9,9 +8,7 @@ type Props = {
 }
 
 export default (props: Props) => (
-    <div style={{
-        padding: "1rem 1rem", width: "10%", overflow: "auto", resize: "horizontal"
-    }}>
+    <>
         <div>{props.author.name}</div>
         <div><i>{props.book.name}</i></div>
         {props.sections.map(section => (
@@ -22,5 +19,5 @@ export default (props: Props) => (
                 <Link href={`/library/reader/${props.book.id}__${section.id}`}>{section.name}</Link>
             </div>
         ))}
-    </div>
+    </>
 )

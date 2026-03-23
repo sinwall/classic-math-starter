@@ -1,16 +1,24 @@
+'use client'
+import {Dispatch, SetStateAction, useContext} from 'react'
 import {arange, LayerContent} from '../../utils/utils'
 import Paragraph from './Paragraph';
+import ProgressContext from '@/context/ProgressContext';
 
 type Props = {
     initial_idxs: number[],
-    layers: LayerContent[]
+    layers: LayerContent[],
+    // step_setter: Dispatch<SetStateAction<number[]>>
 }
 
 export default function (props: Props) {
     let n_paragraphs: number = Math.max(...props.layers.map(layer => layer.n_paragraphs));
-
+    const progress_context = useContext(ProgressContext);
+    if (progress_context === undefined) { 
+        throw new Error("ProgressContext is undefined");
+    }
+;
     return <div>{arange(n_paragraphs).map(row => 
-        <div key={`text-${row}`} style={{
+        <div key={`text-${row}`} onMouseEnter={() => progress_context.set_pgh(row)} style={{
             boxSizing: "border-box", 
             display: "flex",
             borderBottom: "1px dashed #d8cbb2"
