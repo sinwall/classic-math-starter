@@ -1,75 +1,12 @@
-import { readFileSync } from 'fs'
-import path from 'path'
+import Image from "next/image"
 import Reader from '../../../../components/reader/Reader'
-import {IdName, LayerContent, SectionContent} from '../../../../utils/utils'
-import { KineticDiagramConfig } from '@/diagrams/on-spirals'
+import {IdName, SectionContent} from '../../../../utils/utils'
+import {sections_dict, paragraphs_dict, assets_dir} from '../../../../utils/library'
+import { JSX } from "react"
 
 type RouteParams = {
     book_id__section_id: string
 }
-
-class TSVrow {
-    map: Map<string, string>;
-
-    constructor() {
-        this.map = new Map<string, string>();
-    }
-
-    get(key: string): string {
-        let result: string | undefined = this.map.get(key);
-        if (result === undefined) {
-            throw new Error('Key not found');
-        }
-        return result;
-    }
-
-}
-
-class TSVframe {
-    map: Map<string, string[]>;
-
-    constructor(filePath: string) {
-        this.map = new Map<string, string[]>;
-        let lines: string[][] = readFileSync(filePath, 'utf-8').split(/\r?\n/).map(line => line.split('\t'));
-        const keys: string[] = lines[0]; 
-        for (let col: number=0; col<keys.length; ++col) {
-            const key = keys[col];
-            let value = [];
-            for (let ln: number=1; ln<lines.length; ++ln) {
-                value.push(lines[ln][col]);
-            }
-            this.map.set(key, value);
-        }
-    }
-
-    get(key: string): string[] {
-        let result: string[] | undefined = this.map.get(key);
-        if (result === undefined) {
-            throw new Error('Key not found')
-        }
-        return result;
-    }
-
-    keys(): string[] {
-        return [...this.map.keys()];
-    }
-
-    size(): number {
-        return this.get('no').length;
-    }
-
-    selectRow(index: number) {
-        let result: TSVrow = new TSVrow();
-        for (let key of this.map.keys()) {
-            result.map.set(key, this.get(key)[index]);
-        }
-        return result;
-    }
-}
-
-const public_dir = path.join(process.cwd(), 'public')
-const sections_dict = new TSVframe(path.join(public_dir, 'texts/sections.tsv'));
-const paragraphs_dict = new TSVframe(path.join(public_dir, 'texts/paragraphs.tsv'));
 
 
 export default async function Home(
@@ -83,9 +20,11 @@ export default async function Home(
     let book: IdName = {id: book_id_section_id[0], name: ''};
     let section: IdName = {id: book_id_section_id[1], name: ''};
     let sections: IdName[] = [];
+    // let dgm_elements: JSX.Element[] = [];
+    let dgm_authors: string[] = [];
     // query sections_dict to find author name, book name, section name, and sections in the same book
     for (let ln: number=0; ln<sections_dict.size(); ++ln) {
-        let line: TSVrow = sections_dict.selectRow(ln);
+        const line = sections_dict.selectRow(ln);
         if (line.get('book_id') === book.id) {
             author.id = line.get('author_id');
             author.name = line.get('author_name');
@@ -95,6 +34,18 @@ export default async function Home(
             }
             if (section.id === line.get('section_id')) {
                 section.name = line.get('section_name');
+                for (let key of sections_dict.keys()) {
+                    if (key.startsWith('has_diagram_') && line.get(key) === '1') {
+                        let dgm_author_name = key.slice('has_diagram_'.length);
+                        dgm_authors.push(dgm_author_name);
+                        // dgm_elements.push(
+                        //     <div key={dgm_author_name} style={{boxSizing: "border-box", width: "100%", position: "relative"}}>
+                        //         <Image src={`/diagrams/on-spirals/${section.id}__${dgm_author_name}.png`} alt="Heiberg's diagram" width={0} height={0} style={{objectFit: "contain", width:"100%", height:"auto"}} sizes={"100vw"}/>
+                        //         <div style={{textAlign: "center"}}>{dgm_author_name}'s diagram</div>
+                        //     </div>
+                        // )
+                    }
+                }
             }
             sections.push({id: line.get('section_id'), name: line.get('section_name')});
         }
@@ -114,18 +65,6 @@ export default async function Home(
         layer_types: [],
         layers: []
     };
-    for (let ln: number=0; ln<sections_dict.size(); ++ln) {
-        if ((sections_dict.get('book_id')[ln] === book.id) && (sections_dict.get('section_id')[ln] === section.id)) {
-            for (let key of sections_dict.keys()) {
-                if (key.startsWith('has_layer_') && (sections_dict.get(key)[ln] === '1')) {
-                    // paragraphs.n_layers += 1;
-                    // paragraphs.layer_names.push(key.split('has_layer_')[1]);
-                    // paragraphs.layers.push({ n_paragraphs: 0, layer_type: key.split('has_layer_')[1], contents: []});
-                }
-            }
-            break;
-        }
-    }
     for (let ln: number=0; ln<paragraphs_dict.size(); ++ln) {
         if (
             (paragraphs_dict.get('book_id')[ln] === book.id)
@@ -150,8 +89,9 @@ export default async function Home(
             }
         }
     }
+    const Boo = <Image src="./foo.png" alt="HAHA" />;
     return (
         <Reader author={author} book={book} section={section} 
-        sections={sections} content={paragraphs}/>
+        sections={sections} content={paragraphs} dgm_authors={dgm_authors}/>
     );
 }

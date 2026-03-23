@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useState, useReducer, ActionDispatch } from 'react'
+import { createContext, useState, useReducer, ActionDispatch, JSX } from 'react'
 import { IdName, SectionContent } from "@/utils/utils"
 import DiagramViewer from "./DiagramViewer"
 import TextViewer from "./TextViewer"
@@ -10,7 +10,8 @@ type Props = {
     book: IdName,
     section: IdName,
     n_columns: number,
-    content: SectionContent
+    content: SectionContent,
+    dgm_authors: string[]
 }
 
 function reducer(state: {pgh: number, step: number}, action: {type: string, value: number}) {
@@ -35,7 +36,8 @@ export default (props: Props) => {
         <div style={{boxSizing: "border-box", height: "100%", width: "25%"}}>
             <DiagramViewer 
                 book={props.book}
-                section={props.section} 
+                section={props.section}
+                dgm_authors={props.dgm_authors} 
             />
         </div>
         <div style={{boxSizing: "border-box", width: "75%"}}>

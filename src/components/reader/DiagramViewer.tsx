@@ -1,5 +1,5 @@
 'use client'
-import { useState, useContext } from "react"
+import { useState, useContext, JSX } from "react"
 import Image from "next/image"
 import { GeneralDOM } from '@/diagrams/on-spirals'
 import { IdName } from '@/utils/utils'
@@ -8,10 +8,11 @@ import ProgressContext from "@/context/ProgressContext"
 
 type Props = {
     book: IdName,
-    section: IdName
+    section: IdName,
+    dgm_authors: string[]
 }
 
-function KineticDiagramViewer(props: Props) {
+function KineticDiagramViewer(props: {book: IdName, section: IdName}) {
     const progress_context = useContext(ProgressContext);
     if (progress_context === undefined) {
         throw new Error("ProgressContext is undefined");
@@ -70,15 +71,21 @@ export default (props: Props) => {
                 <label htmlFor="dgm-type-printed">Printed</label>
             </span>
         </div>
-        <div style={{boxSizing: "border-box", width: "100%", height: "calc(100% - 20px)"}}>
+        <div style={{boxSizing: "border-box", width: "100%", height: "calc(100% - 20px)", overflowY: "auto"}}>
             {(() => {
                 if (layer_idx[0] === 0) {
                     return <KineticDiagramViewer book={props.book} section={props.section} />
                 } else if (layer_idx[0] === 1) {
-                    return <div style={{boxSizing: "border-box", width: "100%", position: "relative"}}>
-                        <Image src={`/diagrams/on-spirals/${props.section.id}__Heiberg.png`} alt="Heiberg's diagram" width={0} height={0} style={{objectFit: "contain", width:"100%", height:"auto"}} sizes={"100vw"}/>
-                        <div style={{textAlign: "center"}}>Heiberg's diagram</div>
-                    </div>
+                    return <>{props.dgm_authors.map((dgm_author, idx) => (
+                        <div key={idx} style={{boxSizing: "border-box", width: "100%", position: "relative"}}>
+                            <Image src={`/diagrams/${props.book.id}/${props.section.id}__${dgm_author}.png`} alt={`${dgm_author}'s diagram`} width={0} height={0} style={{objectFit: "contain", width:"100%", height:"auto"}} sizes={"100vw"}/>
+                            <div style={{textAlign: "center"}}>{dgm_author}'s diagram</div>
+                        </div>
+                    ))}</>
+                    // <div style={{boxSizing: "border-box", width: "100%", position: "relative"}}>
+                    //     <Image src={`/diagrams/on-spirals/${props.section.id}__Heiberg.png`} alt="Heiberg's diagram" width={0} height={0} style={{objectFit: "contain", width:"100%", height:"auto"}} sizes={"100vw"}/>
+                    //     <div style={{textAlign: "center"}}>Heiberg's diagram</div>
+                    // </div>
                 } else {
                     return <></>
                 }

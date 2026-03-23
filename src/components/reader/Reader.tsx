@@ -2,6 +2,7 @@ import TopBar from '../TopBar'
 import SectionNavigator from "./SectionNavigator"
 import {IdName, SectionContent} from '../../utils/utils'
 import SyncedViewer from './SyncedViewer'
+import { JSX } from 'react'
 
 
 type Props = {
@@ -9,7 +10,8 @@ type Props = {
     book: IdName,
     section: IdName,
     sections: IdName[],
-    content: SectionContent
+    content: SectionContent,
+    dgm_authors: string[]
 }
 
 export default (props: Props) => (
@@ -36,6 +38,7 @@ export default (props: Props) => (
                         section={props.section} 
                         n_columns={Math.min(3,props.content.layers.length)} 
                         content={props.content} 
+                        dgm_authors={props.dgm_authors}
                     />
                 </div>
             </div>
