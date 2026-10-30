@@ -3,50 +3,23 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DOMParser } from '@xmldom/xmldom';
 import xpath from 'xpath';
-import type { Client } from 'pg';
+import pg, { type Client } from 'pg';
 import { fetchGithubFile, fetchGithubDir } from './github.ts';
+import type { SectionsData, ParagraphsData } from '../utils/utils.ts';
 
 const TEI_NS = "http://www.tei-c.org/ns/1.0";
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 const GITHUB_ID = "sinwall";
 const GITHUB_REPO = "classics_in_mathematics_texts";
 
-type Column = string | number | null;
-
-interface SectionsData {
-  id: number[];
-  book_title_id: string[];
-  book_title_name: string[];
-  author_id: string[];
-  author_name: string[];
-  section_id: string[];
-  section_name: (string | null)[];
-  has_layer_ELH: number[];
-  has_layer_KOR: number[];
-  has_layer_MAT: number[];
-  image_names: string[];
-}
-
-interface ParagraphsData {
-  id: number[];
-  book_title_id: string[];
-  book_title_name: string[];
-  author_id: string[];
-  author_name: string[];
-  section_id: string[];
-  section_name: (string | null)[];
-  paragraph_no: number[];
-  layer_type_id: string[];
-  layer_type_name: string[];
-  content: string[];
-}
+type Column = string | number;
 
 interface BasicData {
   book_title_id: string;
   book_title_name: string;
   author_id: string;
   author_name: string;
-  section_id_name_map: Map<string, string | null>;
+  section_id_name_map: Map<string, string>;
 }
 
 // TEI 네임스페이스를 인식하는 xpath 셀렉터
@@ -98,12 +71,13 @@ function stripXmlIdPrefix(el: Element, prefix: string, what: string): string {
   return id.substring(prefix.length);
 }
 
-function repeat<T>(value: T, n: number): T[] {
-  return Array.from({ length: n }, () => value);
-}
-
-function range(n: number, start = 0): number[] {
-  return Array.from({ length: n }, (_, i) => start + i);
+/** getAttribute의 래퍼. 속성이 없으면 null 대신 에러를 던진다. */
+function getRequiredAttribute(el: Element, name: string): string {
+  const value = el.getAttribute(name);
+  if (value === null) {
+    throw new Error(`<${el.tagName}> 요소에 '${name}' 속성이 없습니다.`);
+  }
+  return value;
 }
 
 const LAYER_TYPE_MAP = new Map([
@@ -137,7 +111,6 @@ function extractTEIMetadata(xmlString: string) {
   // 3) 각 section
   const sections = selectElements('//tei:div[@type="section"]', root);
   const sections_id = sections.map((el) => stripXmlIdPrefix(el, "section-", "section"));
-  const n_sections = sections.length;
 
   const basic_data: BasicData = {
     book_title_id,
@@ -146,47 +119,28 @@ function extractTEIMetadata(xmlString: string) {
     author_name,
     section_id_name_map: new Map()
   };
-  const sections_data: SectionsData = {
-    id: range(n_sections),
+  const sections_data: SectionsData[] = sections.map((el, i) => ({
+    id: i,
 
-    book_title_id: repeat(book_title_id, n_sections),
-    book_title_name: repeat(book_title_name, n_sections),
+    book_title_id,
+    book_title_name,
 
-    author_id: repeat(author_id, n_sections),
-    author_name: repeat(author_name, n_sections),
+    author_id,
+    author_name,
 
-    section_id: sections_id,
-    section_name: sections.map((el) => (el.getAttribute("n"))),
+    section_id: sections_id[i],
+    section_name: getRequiredAttribute(el, "n"),
 
-    has_layer_ELH: sections.map((el) => Math.min(1, selectElements(".//tei:div[@type=\"layer\" and @n=\"ELH\"]", el).length) ),
-    has_layer_KOR: sections.map((el) => Math.min(1, selectElements(".//tei:div[@type=\"layer\" and @n=\"KOR\"]", el).length) ),
+    has_layer_ELH: Math.min(1, selectElements(".//tei:div[@type=\"layer\" and @n=\"ELH\"]", el).length),
+    has_layer_KOR: Math.min(1, selectElements(".//tei:div[@type=\"layer\" and @n=\"KOR\"]", el).length),
 
-    has_layer_MAT: repeat(0, n_sections),
+    has_layer_MAT: 0,
 
-    image_names: repeat("", n_sections),
-  };
-  const paragraphs_data: ParagraphsData = {
-    id: [],
-
-    book_title_id: [],
-    book_title_name: [],
-
-    author_id: [],
-    author_name: [],
-
-    section_id: [],
-    section_name: [],
-
-    paragraph_no: [],
-
-    layer_type_id: [],
-    layer_type_name: [],
-
-    content: []
-  };
+    image_names: "",
+  }));
+  const paragraphs_data: ParagraphsData[] = [];
   for (const [sectionIndex, el] of sections.entries()) {
     for (const layer of selectElements('./tei:div[@type="layer"]', el)) {
-      const cumsz = paragraphs_data.id.length;
       const paragraphs = selectElements('./tei:p', layer);
       const layer_type_id = layer.getAttribute("n");
       const layer_type_name = layer_type_id === null ? undefined : LAYER_TYPE_MAP.get(layer_type_id);
@@ -194,40 +148,42 @@ function extractTEIMetadata(xmlString: string) {
         continue;
       }
 
-      paragraphs_data.id.push(...range(paragraphs.length, cumsz));
+      for (const [paragraph_no, p] of paragraphs.entries()) {
+        paragraphs_data.push({
+          id: paragraphs_data.length,
 
-      paragraphs_data.book_title_id.push(...repeat(book_title_id, paragraphs.length));
-      paragraphs_data.book_title_name.push(...repeat(book_title_name, paragraphs.length));
+          book_title_id,
+          book_title_name,
 
-      paragraphs_data.author_id.push(...repeat(author_id, paragraphs.length));
-      paragraphs_data.author_name.push(...repeat(author_name, paragraphs.length));
+          author_id,
+          author_name,
 
-      paragraphs_data.section_id.push(...repeat(sections_id[sectionIndex], paragraphs.length));
-      paragraphs_data.section_name.push(...repeat(el.getAttribute("n"), paragraphs.length));
+          section_id: sections_id[sectionIndex],
+          section_name: getRequiredAttribute(el, "n"),
 
-      paragraphs_data.paragraph_no.push(...range(paragraphs.length));
+          paragraph_no,
 
-      paragraphs_data.layer_type_id.push(...repeat(layer_type_id, paragraphs.length));
-      paragraphs_data.layer_type_name.push(...repeat(layer_type_name, paragraphs.length));
+          layer_type_id,
+          layer_type_name,
 
-      paragraphs_data.content.push(...paragraphs.map((p) => (p.textContent ?? '').trim()));
+          content: (p.textContent ?? '').trim(),
+        });
+      }
 
       // basic_data.section_id_name_map.set(book_title_id) = book_title_name;
       // basic_data.section_id_name_map.set(author_id) = author_name;
-      basic_data.section_id_name_map.set(sections_id[sectionIndex], el.getAttribute("n"));
+      basic_data.section_id_name_map.set(sections_id[sectionIndex], getRequiredAttribute(el, "n"));
     }
   }
 
   return {sections_data, paragraphs_data, basic_data};
 }
 
-function rearrangeImageInfo(image_name_list: string[], metadata_TEI: SectionsData): string[] {
-  const image_names: string[] = repeat("", metadata_TEI.id.length);
-  for (let i = 0; i < metadata_TEI.section_id.length; i++) {
-    const title_id = metadata_TEI.section_id[i];
-    image_names[i] = image_name_list.filter((image_name) => image_name.startsWith(title_id)).join(";");
+/** 각 section의 image_names를 그 section_id로 시작하는 이미지 이름들로 채운다. */
+function rearrangeImageInfo(image_name_list: string[], metadata_TEI: SectionsData[]): void {
+  for (const section of metadata_TEI) {
+    section.image_names = image_name_list.filter((image_name) => image_name.startsWith(section.section_id)).join(";");
   }
-  return image_names;
 }
 
 const TITLE_COMMAND_NAME = "whatIsTitle";
@@ -386,10 +342,10 @@ function extractParagraphBySection(texContent: string): { id: string; paragraphs
   return result;
 }
 
-function writeTSV<K extends string>(object: Record<K, readonly Column[]>, keys: readonly K[], filePath: string): void {
+function writeTSV<K extends string>(rows: readonly Record<K, Column>[], keys: readonly K[], filePath: string): void {
   const header = keys.join('\t');
-  const rows = object[keys[0]].map((_, i) => keys.map((key) => object[key][i]).join('\t'));
-  const tsvContent = [header, ...rows].join('\n');
+  const lines = rows.map((row) => keys.map((key) => row[key]).join('\t'));
+  const tsvContent = [header, ...lines].join('\n');
   fs.writeFileSync(filePath, tsvContent, 'utf-8');
 }
 
@@ -434,14 +390,13 @@ async function connectNeon(): Promise<Client> {
   if (!url) {
     throw new Error('DATABASE_URL_UNPOOLED (또는 DATABASE_URL) 환경변수가 설정되어 있지 않습니다.');
   }
-  const pg = await import('pg'); // --tsv 모드에서는 pg가 없어도 되도록 필요할 때만 불러온다
-  const db = new pg.default.Client({ connectionString: url });
+  const db = new pg.Client({ connectionString: url });
   await db.connect();
   return db;
 }
 
 /**
- * writeTSV의 대체. 같은 모양의 열 단위 object를 받아 tableName 테이블에 적재한다.
+ * writeTSV의 대체. 행 객체의 배열을 받아 tableName 테이블에 적재한다.
  * 기존 행은 지우지 않고 INSERT만 한다. 중복을 피하려면 호출하는 쪽(main)이 먼저 DELETE해야 한다.
  * 여러 책의 행이 섞여 있어도 된다.
  * 트랜잭션은 호출하는 쪽(main)이 BEGIN/COMMIT으로 감싼다.
@@ -449,7 +404,7 @@ async function connectNeon(): Promise<Client> {
  */
 async function writeNeon<K extends string>(
   db: Client,
-  object: Record<K, readonly Column[]>,
+  rows: readonly Record<K, Column>[],
   keys: readonly K[],
   tableName: TableName,
 ): Promise<number> {
@@ -459,27 +414,23 @@ async function writeNeon<K extends string>(
     if (!(key in spec)) throw new Error(`${tableName} 테이블에 없는 열: ${key}`);
   }
 
-  const nRows = object[keys[0]].length;
+  const nRows = rows.length;
   if (nRows === 0) {
     // 가져오기 실패 등으로 빈 데이터가 오면 기존 데이터를 지우지 않고 멈춘다.
     throw new Error(`${tableName}: 적재할 행이 없습니다.`);
-  }
-  for (const key of keys) {
-    if (object[key].length !== nRows) {
-      throw new Error(`${tableName}: 열 '${key}'의 길이(${object[key].length})가 ${nRows}와 다릅니다.`);
-    }
   }
 
   const table = `"${tableName}"`;
   // JS 쪽 키는 TSV 헤더 그대로(has_layer_ELH)지만, DB 열 이름은 Postgres 관례대로 소문자(has_layer_elh)다.
   // 그래야 나중에 SQL을 쓸 때 따옴표 없이 has_layer_elh라고 쓸 수 있다.
   const columns = keys.map((key) => `"${key.toLowerCase()}"`).join(', ');
-  // 열마다 배열 하나를 파라미터로 넘기고 unnest로 행으로 펼친다. 행 수가 늘어도 파라미터는 열 수만큼이다.
+  // 행 배열을 열마다 배열 하나로 모아 파라미터로 넘기고 unnest로 다시 행으로 펼친다.
+  // 행 수가 늘어도 파라미터는 열 수만큼이다.
   const arrays = keys.map((key, i) => `$${i + 1}::${spec[key]}[]`).join(', ');
 
   await db.query(
     `INSERT INTO ${table} (${columns}) SELECT * FROM unnest(${arrays})`,
-    keys.map((key) => object[key]),
+    keys.map((key) => rows.map((row) => row[key])),
   );
   return nRows;
 }
@@ -498,7 +449,7 @@ async function main(): Promise<number> {
 
   const { ok: existsImageFolder, content: image_name_list} = await fetchGithubDir(GITHUB_ID, GITHUB_REPO, `${book_title}/images`);
   if (existsImageFolder) {
-    metadata_TEI.image_names = rearrangeImageInfo(
+    rearrangeImageInfo(
       image_name_list.filter((item) => (item.type === "file")).map(item => item.name),
       metadata_TEI
     );
@@ -506,29 +457,33 @@ async function main(): Promise<number> {
   const { ok: existsModern, content: modernTeX } = await fetchGithubFile(GITHUB_ID, GITHUB_REPO, `${book_title}/modern.tex`);
   if (existsModern) {
     for (const {id:sectionId, paragraphs: paragraphList} of extractParagraphBySection(stripLatexComments(modernTeX))) {
-      for (let i = 0; i < metadata_TEI.section_id.length; i++) {
-        if (metadata_TEI.section_id[i] === sectionId) {
-          metadata_TEI.has_layer_MAT[i] = paragraphList.length > 0 ? 1 : 0;
+      if (!basic_data.section_id_name_map.has(sectionId)) {
+        throw new Error(`section '${sectionId}'의 이름을 text.xml에서 찾지 못했습니다.`);
+      }
+      const section = metadata_TEI.find((s) => s.section_id === sectionId);
+      if (section) {
+        section.has_layer_MAT = paragraphList.length > 0 ? 1 : 0;
 
-          const baseNo = paragraphs_TEI.id.length;
-          paragraphs_TEI.id.push(...range(paragraphList.length, baseNo));
+        for (const [paragraph_no, content] of paragraphList.entries()) {
+          paragraphs_TEI.push({
+            id: paragraphs_TEI.length,
 
-          paragraphs_TEI.author_id.push(...repeat(basic_data.author_id, paragraphList.length));
-          paragraphs_TEI.author_name.push(...repeat(basic_data.author_name, paragraphList.length));
+            book_title_id: basic_data.book_title_id,
+            book_title_name: basic_data.book_title_name,
 
-          paragraphs_TEI.book_title_id.push(...repeat(basic_data.book_title_id, paragraphList.length));
-          paragraphs_TEI.book_title_name.push(...repeat(basic_data.book_title_name, paragraphList.length));
+            author_id: basic_data.author_id,
+            author_name: basic_data.author_name,
 
-          paragraphs_TEI.section_id.push(...repeat(sectionId, paragraphList.length));
-          paragraphs_TEI.section_name.push(...repeat(basic_data.section_id_name_map.get(sectionId) ?? null, paragraphList.length));
+            section_id: sectionId,
+            section_name: basic_data.section_id_name_map.get(sectionId) ?? "",
 
-          paragraphs_TEI.paragraph_no.push(...range(paragraphList.length));
+            paragraph_no,
 
-          paragraphs_TEI.layer_type_id.push(...repeat('MAT', paragraphList.length));
-          paragraphs_TEI.layer_type_name.push(...repeat('Math', paragraphList.length));
+            layer_type_id: 'MAT',
+            layer_type_name: 'Math',
 
-          paragraphs_TEI.content.push(...paragraphList);
-          break;
+            content,
+          });
         }
       }
     }
