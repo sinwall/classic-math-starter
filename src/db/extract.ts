@@ -386,9 +386,9 @@ const TABLE_SPECS: Record<TableName, Record<string, PgType>> = {
 };
 
 async function connectNeon(): Promise<Client> {
-  const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
+  const url = process.env.STORAGE_DATABASE_URL_UNPOOLED || process.env.STORAGE_DATABASE_URL;
   if (!url) {
-    throw new Error('DATABASE_URL_UNPOOLED (또는 DATABASE_URL) 환경변수가 설정되어 있지 않습니다.');
+    throw new Error('STORAGE_DATABASE_URL_UNPOOLED (또는 STORAGE_DATABASE_URL) 환경변수가 설정되어 있지 않습니다.');
   }
   const db = new pg.Client({ connectionString: url });
   await db.connect();
