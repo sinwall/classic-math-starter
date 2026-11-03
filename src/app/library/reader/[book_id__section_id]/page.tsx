@@ -16,15 +16,26 @@ export default async function Home(
 
     // read and parse book_id and section_id from params
     let [book_id, section_id, ..._]: string[] = params.book_id__section_id.split('__');
-    // let dgm_elements: JSX.Element[] = [];
-    // query neon db to find author name, book name, section name, and sections in the same book
-    const section_rows: SectionsData[] = await query<SectionsData>(
-        `SELECT *
-         FROM texts.sections
-         WHERE book_title_id = $1
-         ORDER BY id`,
-        [book_id]
+    // query neon db once to get (1) sections in the same book, from which author name, book name, section name are read,
+    // and (2) paragraphs in the selected section. If section_id is empty, the first section of the book is selected.
+    // json_agg returns NULL (not []) when there is no row.
+    const [fetched] = await query<{sections: SectionsData[] | null, paragraphs: ParagraphsData[] | null}>(
+        `WITH s AS (
+             SELECT *
+             FROM texts.sections
+             WHERE book_title_id = $1
+         ),
+         target AS (
+             SELECT COALESCE(NULLIF($2::text, ''), (SELECT section_id FROM s ORDER BY id LIMIT 1)) AS section_id
+         )
+         SELECT
+             (SELECT json_agg(s ORDER BY s.id) FROM s) AS sections,
+             (SELECT json_agg(p ORDER BY p.id)
+              FROM texts.paragraphs p
+              WHERE p.book_title_id = $1 AND p.section_id = (SELECT section_id FROM target)) AS paragraphs`,
+        [book_id, section_id]
     );
+    const section_rows: SectionsData[] = fetched.sections ?? [];
     if (section_rows.length === 0) {
         throw new Error("해당하는 자료를 찾을 수 없습니다.")
     }
@@ -32,34 +43,14 @@ export default async function Home(
     const author: IdName = {id: row_selected.author_id, name: row_selected.author_name};
     const book: IdName = {id: book_id, name: row_selected.book_title_name};
     section_id = (section_id === '') ? row_selected.section_id : section_id;
-    const row_found: SectionsData | undefined = section_rows.find(row => row.section_id === section_id);
-    if (row_found === undefined) {
-        throw new Error("해당하는 자료를 찾을 수 없습니다.")
-    }
-    row_selected = row_found;
     const section: IdName = {
         id: section_id,
         name: row_selected.section_name
     }
     const sections: IdName[] = section_rows.map(row => ({id: row.section_id, name: row.section_name}));
     const dgm_authors: string[] = row_selected.image_names.split(';').filter(name => name !== '').map(name => name.slice(name.indexOf('_') + 1).replace(/\.png$/, ''));
-    // // read diagram config from src/diagrams/${book.id}.tsx
-    // const {configs: diagram_configs} = await import(`../../../../diagrams/${book.id}.tsx`);
-    // let dgm_config: KineticDiagramConfig = diagram_configs[0];
-    // for (let c of diagram_configs) {
-    //     if (c.section_id === section.id) {
-    //         dgm_config = c;
-    //         break;
-    //     }
-    // }
-    // query paragraphs_dict to find paragraphs in the section, and organize them by layers
-    const paragraph_rows: ParagraphsData[] = await query<ParagraphsData>(
-        `SELECT *
-         FROM texts.paragraphs
-         WHERE book_title_id = $1 AND section_id = $2
-         ORDER BY id`,
-        [book.id, section.id]
-    );
+    const paragraph_rows: ParagraphsData[] = fetched.paragraphs ?? [];
+
     // layer_type_id and layer_type_name pairs, in order of first appearance
     const layer_types: IdName[] = [];
     for (const row of paragraph_rows) {
