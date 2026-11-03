@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DOMParser } from '@xmldom/xmldom';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import xpath from 'xpath';
 import pg, { type Client } from 'pg';
 import { fetchGithubFile, fetchGithubDir } from './github.ts';
@@ -57,6 +57,20 @@ function selectFirstElement(expression: string, node: Node): Element {
     throw new Error(`No element matches XPath: ${expression}`);
   }
   return first;
+}
+
+const serializer = new XMLSerializer();
+
+type XmldomNode = Parameters<XMLSerializer['serializeToString']>[0];
+
+/** 요소의 자식들(텍스트와 태그)을 XML 문자열로 직렬화한다. 브라우저 DOM의 innerHTML에 해당한다. */
+function innerXml(el: Element): string {
+  return Array.from(el.childNodes)
+    // DOM lib의 ChildNode와 xmldom의 Node는 타입이 달라서 직렬화기가 받는 타입으로 좁힌다.
+    .map((node) => serializer.serializeToString(node as unknown as XmldomNode))
+    .join('')
+    // 자식을 단독으로 직렬화하면 최상위 자식마다 붙는 TEI 네임스페이스 선언을 뗀다.
+    .replaceAll(` xmlns="${TEI_NS}"`, '');
 }
 
 /** xml:id 속성값을 네임스페이스 인지 방식으로 안전하게 읽는다. */
@@ -166,7 +180,7 @@ function extractTEIMetadata(xmlString: string) {
           layer_type_id,
           layer_type_name,
 
-          content: (p.textContent ?? '').trim(),
+          content: innerXml(p).trim(),
         });
       }
 
