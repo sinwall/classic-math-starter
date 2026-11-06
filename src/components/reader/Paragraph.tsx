@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { IdName } from '@/utils/utils';
 import Footnote from './Footnote'
 
-const footnote_re = /<note n="(\d+)">(.*?)<\/note>/;
+const footnote_re = /<note place="bottom" n="(\d+)">(.*?)<\/note>/;
 
 function preprocess_footnotes(paragraph: string, layer_type: string) {
     let splitted: string[] = paragraph.split(footnote_re);

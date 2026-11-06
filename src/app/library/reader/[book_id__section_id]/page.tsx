@@ -1,7 +1,7 @@
 import Image from "next/image"
 import Reader from '../../../../components/reader/Reader'
-import {IdName, SectionContent} from '../../../../utils/utils'
-import {sections_dict, paragraphs_dict, assets_dir} from '../../../../utils/library'
+import {IdName, LayerContent, SectionContent, SectionsData, ParagraphsData} from '../../../../utils/utils'
+import {query} from '../../../../db/query'
 import { JSX } from "react"
 
 type RouteParams = {
@@ -15,81 +15,60 @@ export default async function Home(
     const params: RouteParams = await context.params;
 
     // read and parse book_id and section_id from params
-    const book_id_section_id: string[] = params.book_id__section_id.split('__');
-    let author: IdName = {id: '', name: ''};
-    let book: IdName = {id: book_id_section_id[0], name: ''};
-    let section: IdName = {id: book_id_section_id[1], name: ''};
-    let sections: IdName[] = [];
-    // let dgm_elements: JSX.Element[] = [];
-    let dgm_authors: string[] = [];
-    // query sections_dict to find author name, book name, section name, and sections in the same book
-    for (let ln: number=0; ln<sections_dict.size(); ++ln) {
-        const line = sections_dict.selectRow(ln);
-        if (line.get('book_id') === book.id) {
-            author.id = line.get('author_id');
-            author.name = line.get('author_name');
-            book.name = line.get('book_name');
-            if (section.id === '') {
-                section.id = line.get('section_id');
-            }
-            if (section.id === line.get('section_id')) {
-                section.name = line.get('section_name');
-                for (let key of sections_dict.keys()) {
-                    if (key.startsWith('has_diagram_') && line.get(key) === '1') {
-                        let dgm_author_name = key.slice('has_diagram_'.length);
-                        dgm_authors.push(dgm_author_name);
-                        // dgm_elements.push(
-                        //     <div key={dgm_author_name} style={{boxSizing: "border-box", width: "100%", position: "relative"}}>
-                        //         <Image src={`/diagrams/on-spirals/${section.id}__${dgm_author_name}.png`} alt="Heiberg's diagram" width={0} height={0} style={{objectFit: "contain", width:"100%", height:"auto"}} sizes={"100vw"}/>
-                        //         <div style={{textAlign: "center"}}>{dgm_author_name}'s diagram</div>
-                        //     </div>
-                        // )
-                    }
-                }
-            }
-            sections.push({id: line.get('section_id'), name: line.get('section_name')});
+    let [book_id, section_id, ..._]: string[] = params.book_id__section_id.split('__');
+    // query neon db once to get (1) sections in the same book, from which author name, book name, section name are read,
+    // and (2) paragraphs in the selected section. If section_id is empty, the first section of the book is selected.
+    // json_agg returns NULL (not []) when there is no row.
+    const [fetched] = await query<{sections: SectionsData[] | null, paragraphs: ParagraphsData[] | null}>(
+        `WITH s AS (
+             SELECT *
+             FROM texts.sections
+             WHERE book_title_id = $1
+         ),
+         target AS (
+             SELECT COALESCE(NULLIF($2::text, ''), (SELECT section_id FROM s ORDER BY id LIMIT 1)) AS section_id
+         )
+         SELECT
+             (SELECT json_agg(s ORDER BY s.id) FROM s) AS sections,
+             (SELECT json_agg(p ORDER BY p.id)
+              FROM texts.paragraphs p
+              WHERE p.book_title_id = $1 AND p.section_id = (SELECT section_id FROM target)) AS paragraphs`,
+        [book_id, section_id]
+    );
+    const section_rows: SectionsData[] = fetched.sections ?? [];
+    if (section_rows.length === 0) {
+        throw new Error("해당하는 자료를 찾을 수 없습니다.")
+    }
+    let row_selected: SectionsData = section_rows[0];
+    const author: IdName = {id: row_selected.author_id, name: row_selected.author_name};
+    const book: IdName = {id: book_id, name: row_selected.book_title_name};
+    section_id = (section_id === '') ? row_selected.section_id : section_id;
+    const section: IdName = {
+        id: section_id,
+        name: row_selected.section_name
+    }
+    const sections: IdName[] = section_rows.map(row => ({id: row.section_id, name: row.section_name}));
+    const dgm_authors: string[] = row_selected.image_names.split(';').filter(name => name !== '').map(name => name.slice(name.indexOf('_') + 1).replace(/\.png$/, ''));
+    const paragraph_rows: ParagraphsData[] = fetched.paragraphs ?? [];
+
+    // layer_type_id and layer_type_name pairs, in order of first appearance
+    const layer_types: IdName[] = [];
+    for (const row of paragraph_rows) {
+        if (!layer_types.some(layer_type => layer_type.id === row.layer_type_id)) {
+            layer_types.push({id: row.layer_type_id, name: row.layer_type_name});
         }
     }
-    // // read diagram config from src/diagrams/${book.id}.tsx
-    // const {configs: diagram_configs} = await import(`../../../../diagrams/${book.id}.tsx`);
-    // let dgm_config: KineticDiagramConfig = diagram_configs[0];
-    // for (let c of diagram_configs) {
-    //     if (c.section_id === section.id) {
-    //         dgm_config = c;
-    //         break;
-    //     }
-    // }
-    // query paragraphs_dict to find paragraphs in the section, and organize them by layers
-    let paragraphs: SectionContent = {
-        n_layers: 0,
-        layer_types: [],
-        layers: []
+    const layers: LayerContent[] = layer_types.map(layer_type => {
+        const contents: string[] = paragraph_rows
+            .filter(row => row.layer_type_id === layer_type.id)
+            .map(row => row.content);
+        return {n_paragraphs: contents.length, layer_type: layer_type, paragraphs: contents};
+    });
+    const paragraphs: SectionContent = {
+        n_layers: layer_types.length, 
+        layer_types: layer_types, 
+        layers: layers
     };
-    for (let ln: number=0; ln<paragraphs_dict.size(); ++ln) {
-        if (
-            (paragraphs_dict.get('book_id')[ln] === book.id)
-            && (paragraphs_dict.get('section_id')[ln] === section.id)
-        ) {
-            const layer_type: IdName = {
-                id: paragraphs_dict.get('layer_type_id')[ln],
-                name: paragraphs_dict.get('layer_type_name')[ln]
-            };
-            for (let idx: number=0; idx<=paragraphs.n_layers; ++idx) {
-                if (idx === paragraphs.n_layers) {
-                    paragraphs.n_layers ++;
-                    paragraphs.layer_types.push(layer_type);
-                    paragraphs.layers.push({ n_paragraphs: 0, layer_type: layer_type, paragraphs: []});
-                }
-                if (paragraphs.layer_types[idx].id === layer_type.id) {
-                    const content: string = paragraphs_dict.get('content')[ln];
-                    paragraphs.layers[idx].n_paragraphs += 1;
-                    paragraphs.layers[idx].paragraphs.push(content);
-                    break;
-                }
-            }
-        }
-    }
-    const Boo = <Image src="./foo.png" alt="HAHA" />;
     return (
         <Reader author={author} book={book} section={section} 
         sections={sections} content={paragraphs} dgm_authors={dgm_authors}/>
