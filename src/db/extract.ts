@@ -5,7 +5,7 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import xpath from 'xpath';
 import pg, { type Client } from 'pg';
 import { fetchGithubFile, fetchGithubDir } from './github.ts';
-import type { SectionsData, ParagraphsData } from '../utils/utils.ts';
+import type { SectionsData, ParagraphsData, BookRow } from '../utils/utils.ts';
 
 const TEI_NS = "http://www.tei-c.org/ns/1.0";
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
@@ -134,8 +134,6 @@ function extractTEIMetadata(xmlString: string) {
     section_id_name_map: new Map()
   };
   const sections_data: SectionsData[] = sections.map((el, i) => ({
-    id: i,
-
     book_title_id,
     book_title_name,
 
@@ -164,8 +162,6 @@ function extractTEIMetadata(xmlString: string) {
 
       for (const [paragraph_no, p] of paragraphs.entries()) {
         paragraphs_data.push({
-          id: paragraphs_data.length,
-
           book_title_id,
           book_title_name,
 
@@ -356,9 +352,13 @@ function extractParagraphBySection(texContent: string): { id: string; paragraphs
   return result;
 }
 
+/**
+ * 행 배열을 TSV로 저장한다. 원격 DB의 IDENTITY 열처럼, 입력과 별개로 맨 앞에 1부터 시작하는 연번 id 열을 붙인다.
+ * id는 파일마다(테이블마다) 새로 매긴다.
+ */
 function writeTSV<K extends string>(rows: readonly Record<K, Column>[], keys: readonly K[], filePath: string): void {
-  const header = keys.join('\t');
-  const lines = rows.map((row) => keys.map((key) => row[key]).join('\t'));
+  const header = ['id', ...keys].join('\t');
+  const lines = rows.map((row, i) => [i + 1, ...keys.map((key) => row[key])].join('\t'));
   const tsvContent = [header, ...lines].join('\n');
   fs.writeFileSync(filePath, tsvContent, 'utf-8');
 }
@@ -368,31 +368,73 @@ function writeTSV<K extends string>(rows: readonly Record<K, Column>[], keys: re
 // ---------------------------------------------------------------------------
 
 const SECTION_KEYS = [
-  'id', 'book_title_id', 'book_title_name', 'author_id', 'author_name',
+  'book_title_id', 'book_title_name', 'author_id', 'author_name',
   'section_id', 'section_name', 'has_layer_ELH', 'has_layer_KOR', 'has_layer_MAT',
   'image_names'
 ] as const satisfies readonly (keyof SectionsData)[];
 const PARAGRAPH_KEYS = [
-  'id', 'book_title_id', 'book_title_name', 'author_id', 'author_name',
+  'book_title_id', 'book_title_name', 'author_id', 'author_name',
   'section_id', 'section_name', 'layer_type_id', 'layer_type_name', 'paragraph_no',
   'content'
 ] as const satisfies readonly (keyof ParagraphsData)[];
 
-type TableName = 'sections' | 'paragraphs';
+const BOOK_KEYS = [
+  'author_id', 'author_name', 'book_title_id', 'book_title_name', 'default_section_id',
+  'public', 'available', 'complete',
+] as const satisfies readonly (keyof BookRow)[];
+
+/** meta.json 문자열을 검증해서 BookRow로 바꾼다. true/false는 smallint용 1/0으로 바꾼다. */
+function parseBookMeta(text: string, dirName: string): BookRow {
+  const meta: unknown = JSON.parse(text);
+  if (typeof meta !== 'object' || meta === null) {
+    throw new Error(`${dirName}/meta.json: 객체가 아닙니다.`);
+  }
+  const getString = (key: string): string => {
+    const value = (meta as Record<string, unknown>)[key];
+    if (typeof value !== 'string') {
+      throw new Error(`${dirName}/meta.json: '${key}'가 문자열이 아닙니다.`);
+    }
+    return value;
+  };
+  const getFlag = (key: string): number => {
+    const value = (meta as Record<string, unknown>)[key];
+    if (typeof value !== 'boolean') {
+      throw new Error(`${dirName}/meta.json: '${key}'가 boolean이 아닙니다.`);
+    }
+    return value ? 1 : 0;
+  };
+  return {
+    author_id: getString('author_id'),
+    author_name: getString('author_name'),
+    book_title_id: getString('book_title_id'),
+    book_title_name: getString('book_title_name'),
+    default_section_id: getString('default_section_id'),
+    public: getFlag('public'),
+    available: getFlag('available'),
+    complete: getFlag('complete'),
+  };
+}
+
+type TableName = 'books' | 'sections' | 'paragraphs';
 type PgType = 'integer' | 'smallint' | 'text';
 
 // 테이블·열 이름은 SQL에서 파라미터로 넘길 수 없다. 그래서 여기 적힌 이름만 허용해서
 // 이름이 곧 SQL에 들어가도 안전하게 한다. 값은 아래에서 항상 파라미터($1, $2, ...)로만 넘긴다.
 // (schema.sql의 열 타입과 맞춰 둔다.)
 const TABLE_SPECS: Record<TableName, Record<string, PgType>> = {
+  // 세 테이블 모두 id는 GENERATED ALWAYS AS IDENTITY라서 적재할 때 넣지 않는다.
+  books: {
+    author_id: 'text', author_name: 'text', book_title_id: 'text', book_title_name: 'text',
+    default_section_id: 'text', public: 'smallint', available: 'smallint', complete: 'smallint',
+  },
   sections: {
-    id: 'integer', book_title_id: 'text', book_title_name: 'text',
+    book_title_id: 'text', book_title_name: 'text',
     author_id: 'text', author_name: 'text', section_id: 'text', section_name: 'text',
     has_layer_ELH: 'smallint', has_layer_KOR: 'smallint', has_layer_MAT: 'smallint',
     image_names: 'text',
   },
   paragraphs: {
-    id: 'integer', book_title_id: 'text', book_title_name: 'text',
+    book_title_id: 'text', book_title_name: 'text',
     author_id: 'text', author_name: 'text', section_id: 'text', section_name: 'text',
     layer_type_id: 'text', layer_type_name: 'text', paragraph_no: 'integer',
     content: 'text',
@@ -450,6 +492,22 @@ async function writeNeon<K extends string>(
 }
 
 async function main(): Promise<number> {
+  const {ok: existsTextRepo, content: list_at_root } = await fetchGithubDir(GITHUB_ID, GITHUB_REPO, '');
+  if (!existsTextRepo) {
+    throw new Error("No remote repository found.")
+  }
+  const books_data: BookRow[] = [];
+  for (const item of list_at_root) {
+    if (item.type !== 'dir') continue; // README 등 책 폴더가 아닌 항목은 건너뛴다.
+    const {ok: existsBookMeta, content: book_meta } = await fetchGithubFile(GITHUB_ID, GITHUB_REPO, `${item.name}/meta.json`);
+    if (!existsBookMeta) {
+      throw new Error(`${item.name}/meta.json not found.`)
+    }
+    const parsed_book_meta: BookRow = parseBookMeta(book_meta, item.name);
+    if (!parsed_book_meta.available) continue; // 아직 공개할 준비가 안 됨
+    books_data.push(parsed_book_meta);
+  }
+
   const book_title = "on-spirals";
   const {ok: existsMainXML, content: mainXML} = await fetchGithubFile(GITHUB_ID, GITHUB_REPO, `${book_title}/text.xml`);
   if (!existsMainXML) {
@@ -480,8 +538,6 @@ async function main(): Promise<number> {
 
         for (const [paragraph_no, content] of paragraphList.entries()) {
           paragraphs_TEI.push({
-            id: paragraphs_TEI.length,
-
             book_title_id: basic_data.book_title_id,
             book_title_name: basic_data.book_title_name,
 
@@ -505,8 +561,9 @@ async function main(): Promise<number> {
 
   if (process.argv.includes('--tsv')) {
     // 디버깅·비교용: 예전처럼 TSV 파일로 저장한다.
-    writeTSV(metadata_TEI, SECTION_KEYS, 'sections.tsv');
-    writeTSV(paragraphs_TEI, PARAGRAPH_KEYS, 'paragraphs.tsv');
+    writeTSV(books_data, BOOK_KEYS, '.tsv_output/books.tsv');
+    writeTSV(metadata_TEI, SECTION_KEYS, '.tsv_output/sections.tsv');
+    writeTSV(paragraphs_TEI, PARAGRAPH_KEYS, '.tsv_output/paragraphs.tsv');
     return 0;
   }
 
@@ -516,9 +573,12 @@ async function main(): Promise<number> {
     await db.query('SET LOCAL search_path TO texts')
     await db.query('DELETE FROM paragraphs');
     await db.query('DELETE FROM sections');
+    await db.query('DELETE FROM books');
+    const nBooks = await writeNeon(db, books_data, BOOK_KEYS, 'books');
     const nSections = await writeNeon(db, metadata_TEI, SECTION_KEYS, 'sections');
     const nParagraphs = await writeNeon(db, paragraphs_TEI, PARAGRAPH_KEYS, 'paragraphs');
     await db.query('COMMIT');
+    console.log(`books ${nBooks}행 적재 완료`);
     console.log(`[${book_title}] sections ${nSections}행, paragraphs ${nParagraphs}행 적재 완료`);
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});
@@ -536,4 +596,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   });
 }
 
-export { main, writeTSV, writeNeon, connectNeon, SECTION_KEYS, PARAGRAPH_KEYS };
+export { main, writeTSV, writeNeon, connectNeon, SECTION_KEYS, PARAGRAPH_KEYS, BOOK_KEYS };

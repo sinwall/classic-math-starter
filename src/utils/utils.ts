@@ -16,7 +16,6 @@ type SectionContent = {
 }
 
 type SectionsData = {
-    id: number,
     book_title_id: string,
     book_title_name: string,
     author_id: string,
@@ -30,7 +29,6 @@ type SectionsData = {
 }
 
 type ParagraphsData = {
-    id: number,
     book_title_id: string,
     book_title_name: string,
     author_id: string,
@@ -41,6 +39,18 @@ type ParagraphsData = {
     layer_type_id: string,
     layer_type_name: string,
     content: string
+}
+
+/** 책 폴더의 meta.json을 books 테이블 행으로 바꾼 것. id는 DB가 매기므로 없다. boolean은 0/1이다. */
+type BookRow = {
+    author_id: string,
+    author_name: string,
+    book_title_id: string,
+    book_title_name: string,
+    default_section_id: string,
+    public: number,
+    available: number,
+    complete: number
 }
 
 function arange(lb: number, ub: number | undefined = undefined): number[] {
@@ -54,5 +64,5 @@ function arange(lb: number, ub: number | undefined = undefined): number[] {
     return result;
 }
 
-export type {IdName, LayerContent, SectionContent, SectionsData, ParagraphsData};
+export type {IdName, LayerContent, SectionContent, SectionsData, ParagraphsData, BookRow};
 export {arange};
