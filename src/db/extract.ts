@@ -491,24 +491,8 @@ async function writeNeon<K extends string>(
   return nRows;
 }
 
-async function main(): Promise<number> {
-  const {ok: existsTextRepo, content: list_at_root } = await fetchGithubDir(GITHUB_ID, GITHUB_REPO, '');
-  if (!existsTextRepo) {
-    throw new Error("No remote repository found.")
-  }
-  const books_data: BookRow[] = [];
-  for (const item of list_at_root) {
-    if (item.type !== 'dir') continue; // README 등 책 폴더가 아닌 항목은 건너뛴다.
-    const {ok: existsBookMeta, content: book_meta } = await fetchGithubFile(GITHUB_ID, GITHUB_REPO, `${item.name}/meta.json`);
-    if (!existsBookMeta) {
-      throw new Error(`${item.name}/meta.json not found.`)
-    }
-    const parsed_book_meta: BookRow = parseBookMeta(book_meta, item.name);
-    if (!parsed_book_meta.available) continue; // 아직 공개할 준비가 안 됨
-    books_data.push(parsed_book_meta);
-  }
-
-  const book_title = "on-spirals";
+/** 책 한 권(book_title_id 폴더)의 text.xml, 이미지 목록, modern.tex를 가져와 sections·paragraphs 행으로 만든다. */
+async function extractFromSingleBook(book_title: string): Promise<{ metadata_TEI: SectionsData[]; paragraphs_TEI: ParagraphsData[] }> {
   const {ok: existsMainXML, content: mainXML} = await fetchGithubFile(GITHUB_ID, GITHUB_REPO, `${book_title}/text.xml`);
   if (!existsMainXML) {
     throw new Error(`Main XML file not found for book: ${book_title}`);
@@ -527,43 +511,69 @@ async function main(): Promise<number> {
     );
   }
   const { ok: existsModern, content: modernTeX } = await fetchGithubFile(GITHUB_ID, GITHUB_REPO, `${book_title}/modern.tex`);
-  if (existsModern) {
-    for (const {id:sectionId, paragraphs: paragraphList} of extractParagraphBySection(stripLatexComments(modernTeX))) {
-      if (!basic_data.section_id_name_map.has(sectionId)) {
-        throw new Error(`section '${sectionId}'의 이름을 text.xml에서 찾지 못했습니다.`);
-      }
-      const section = metadata_TEI.find((s) => s.section_id === sectionId);
-      if (section) {
-        section.has_layer_MAT = paragraphList.length > 0 ? 1 : 0;
-
-        for (const [paragraph_no, content] of paragraphList.entries()) {
-          paragraphs_TEI.push({
-            book_title_id: basic_data.book_title_id,
-            book_title_name: basic_data.book_title_name,
-
-            author_id: basic_data.author_id,
-            author_name: basic_data.author_name,
-
-            section_id: sectionId,
-            section_name: basic_data.section_id_name_map.get(sectionId) ?? "",
-
-            paragraph_no,
-
-            layer_type_id: 'MAT',
-            layer_type_name: 'Math',
-
-            content,
-          });
-        }
-      }
+  if (!existsModern) {
+    return { metadata_TEI, paragraphs_TEI };
+  }
+  for (const {id:sectionId, paragraphs: paragraphList} of extractParagraphBySection(stripLatexComments(modernTeX))) {
+    if (!basic_data.section_id_name_map.has(sectionId)) {
+      throw new Error(`section '${sectionId}'의 이름을 text.xml에서 찾지 못했습니다.`);
     }
+    const section = metadata_TEI.find((s) => s.section_id === sectionId);
+    if (!section) { continue; }
+    section.has_layer_MAT = paragraphList.length > 0 ? 1 : 0;
+    for (const [paragraph_no, content] of paragraphList.entries()) {
+      paragraphs_TEI.push({
+        book_title_id: basic_data.book_title_id,
+        book_title_name: basic_data.book_title_name,
+
+        author_id: basic_data.author_id,
+        author_name: basic_data.author_name,
+
+        section_id: sectionId,
+        section_name: basic_data.section_id_name_map.get(sectionId) ?? "",
+
+        paragraph_no,
+
+        layer_type_id: 'MAT',
+        layer_type_name: 'Math',
+
+        content,
+      });
+    }
+  }
+  return { metadata_TEI, paragraphs_TEI };
+}
+
+async function main(): Promise<number> {
+  const {ok: existsTextRepo, content: list_at_root } = await fetchGithubDir(GITHUB_ID, GITHUB_REPO, '');
+  if (!existsTextRepo) {
+    throw new Error("No remote repository found.")
+  }
+  const books_data: BookRow[] = [];
+  for (const item of list_at_root) {
+    if (item.type !== 'dir') continue; // README 등 책 폴더가 아닌 항목은 건너뛴다.
+    const {ok: existsBookMeta, content: book_meta } = await fetchGithubFile(GITHUB_ID, GITHUB_REPO, `${item.name}/meta.json`);
+    if (!existsBookMeta) {
+      throw new Error(`${item.name}/meta.json not found.`)
+    }
+    const parsed_book_meta: BookRow = parseBookMeta(book_meta, item.name);
+    if (!parsed_book_meta.available) continue; // 아직 공개할 준비가 안 됨
+    books_data.push(parsed_book_meta);
+  }
+
+  const sections_data: SectionsData[] = [];
+  const paragraphs_data: ParagraphsData[] = [];
+  for (const { book_title_id } of books_data) {
+    const { metadata_TEI, paragraphs_TEI } = await extractFromSingleBook(book_title_id);
+    sections_data.push(...metadata_TEI);
+    paragraphs_data.push(...paragraphs_TEI);
   }
 
   if (process.argv.includes('--tsv')) {
     // 디버깅·비교용: 예전처럼 TSV 파일로 저장한다.
     writeTSV(books_data, BOOK_KEYS, '.tsv_output/books.tsv');
-    writeTSV(metadata_TEI, SECTION_KEYS, '.tsv_output/sections.tsv');
-    writeTSV(paragraphs_TEI, PARAGRAPH_KEYS, '.tsv_output/paragraphs.tsv');
+    writeTSV(sections_data, SECTION_KEYS, '.tsv_output/sections.tsv');
+    writeTSV(paragraphs_data, PARAGRAPH_KEYS, '.tsv_output/paragraphs.tsv');
     return 0;
   }
 
@@ -575,11 +585,11 @@ async function main(): Promise<number> {
     await db.query('DELETE FROM sections');
     await db.query('DELETE FROM books');
     const nBooks = await writeNeon(db, books_data, BOOK_KEYS, 'books');
-    const nSections = await writeNeon(db, metadata_TEI, SECTION_KEYS, 'sections');
-    const nParagraphs = await writeNeon(db, paragraphs_TEI, PARAGRAPH_KEYS, 'paragraphs');
+    const nSections = await writeNeon(db, sections_data, SECTION_KEYS, 'sections');
+    const nParagraphs = await writeNeon(db, paragraphs_data, PARAGRAPH_KEYS, 'paragraphs');
     await db.query('COMMIT');
     console.log(`books ${nBooks}행 적재 완료`);
-    console.log(`[${book_title}] sections ${nSections}행, paragraphs ${nParagraphs}행 적재 완료`);
+    console.log(`sections ${nSections}행, paragraphs ${nParagraphs}행 적재 완료`);
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});
     throw err;
